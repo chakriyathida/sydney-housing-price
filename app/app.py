@@ -1,90 +1,74 @@
-"""Sydney Housing Price Estimator - Streamlit app (SIT307 Task 8.1D, Part 5).
+# Sydney Housing Price Estimator - Streamlit app (SIT307 Task 8.1D, Part 5)
+# Run from the project folder:  streamlit run app/app.py
 
-Run from the project folder:
-    pip install -r requirements.txt
-    streamlit run app/app.py
-"""
-import sys
-from datetime import date
-from pathlib import Path
-
+import os
 import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from housing_features import PROPERTY_TYPES, RAW_COLUMNS, SUBURBS, HOUSE_TYPES  # noqa: E402
-
-MODEL_PATH = Path(__file__).resolve().parent / "model.joblib"
-DATA_PATH = ROOT / "Sydney_Housing_Data.xlsx"
-
-st.set_page_config(page_title="Sydney Housing Price Estimator", page_icon="🏠", layout="centered",
-                   initial_sidebar_state="collapsed")
-
-# Open Sans everywhere (loaded from Google Fonts)
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
-html, body, [class*="st-"], .stApp, .stMarkdown, button, input, textarea, select, label, p, h1, h2, h3,
-div[data-testid="stMetricValue"], div[data-testid="stMetricLabel"] {
-    font-family: 'Open Sans', sans-serif !important;
-}
-[data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none; }
-</style>
-""", unsafe_allow_html=True)
+# Load the model that the notebook saved (Part 5.1)
+saved = joblib.load(os.path.join(os.path.dirname(__file__), "model.joblib"))
+model = saved["model"]
+LAND_MEDIANS = saved["land_medians"]
+KEYWORDS = saved["keywords"]
+YES_NO = ["Pool", "Air Con", "Renovated", "Views", "Study", "Outdoor Space"]
 
 
-@st.cache_resource
-def load_model():
-    try:
-        return joblib.load(MODEL_PATH)
-    except Exception:  # missing file or incompatible scikit-learn version -> retrain from the data
-        from train_model import train
-        return train(DATA_PATH, MODEL_PATH)
+def make_features(data):
+    # Same function as Part 2.6 of the notebook
+    X = pd.DataFrame(index=data.index)
+    X["Cabramatta"] = (data["Suburb"] == "Cabramatta").astype(int)
+    X["Vaucluse"] = (data["Suburb"] == "Vaucluse").astype(int)
+    X["IsHouse"] = data["Type"].isin(["House", "Semi/Duplex"]).astype(int)
+    X["Bedrooms"] = data["Bedrooms"]
+    X["Bathrooms"] = data["Bathrooms"]
+    X["Cars"] = data["Cars"].fillna(1).clip(upper=6)
 
+    land = data["Land"].fillna(data["Suburb"].map(LAND_MEDIANS))
+    land = land.where(X["IsHouse"] == 1, 0)
+    X["LogLand"] = np.log1p(land)
 
-bundle = load_model()
-model = bundle["pipeline"]
+    X["Extras"] = (data[YES_NO] == "Yes").sum(axis=1)
 
-
-def predict(row):
-    """Point prediction and 80% range (in dollars) for one property."""
-    df = pd.DataFrame([row])
-    log_pred = model.predict(df[RAW_COLUMNS])[0]
-    lo, hi = bundle["interval"]["House" if row["Type"] in HOUSE_TYPES else "Strata"]
-    return np.exp(log_pred), np.exp(log_pred + lo), np.exp(log_pred + hi)
+    text = data["Description"].fillna("").str.lower()
+    for name, words in KEYWORDS.items():
+        X[name] = text.str.contains(words).astype(int)
+    return X
 
 
 st.title("Sydney Housing Price Estimator")
+st.write("Estimate the sale price of a property in **Mount Druitt**, **Cabramatta** or **Vaucluse**, "
+         "based on 101 recent sales.")
 
 with st.form("property"):
-    c1, c2 = st.columns(2)
-    suburb = c1.selectbox("Suburb", SUBURBS, index=1)
-    ptype = c2.selectbox("Property type", PROPERTY_TYPES, index=0)
-    beds = c1.number_input("Bedrooms", 1, 12, 3)
-    baths = c2.number_input("Bathrooms", 1, 6, 2)
-    cars = c1.number_input("Car spaces", 0, 10, 1)
-    land = c2.number_input("Land size (m²) — enter 0 for units or if unknown", 0, 3000, 550, step=10)
-    sale_date = c1.date_input("Sale date", value=date.today())
-    multi = c2.selectbox("Multi-dwelling / development site sale?", ["No", "Yes"])
+    col1, col2 = st.columns(2)
+    suburb = col1.selectbox("Suburb", ["Mount Druitt", "Cabramatta", "Vaucluse"])
+    prop_type = col2.selectbox("Property type", ["House", "Unit/Apartment", "Townhouse", "Villa", "Semi/Duplex"])
+    bedrooms = col1.number_input("Bedrooms", min_value=1, max_value=12, value=3)
+    bathrooms = col2.number_input("Bathrooms", min_value=1, max_value=6, value=2)
+    cars = col1.number_input("Car spaces", min_value=0, max_value=10, value=1)
+    land = col2.number_input("Land size (m²), 0 for units or if unknown", min_value=0, max_value=3000, value=0)
 
-    st.markdown("**Features**")
-    f = st.columns(3)
-    names = ["Pool", "Air Con", "Renovated", "Views", "Study", "Outdoor Space"]
-    flags = {name: f[i % 3].checkbox(name) for i, name in enumerate(names)}
+    st.write("**Features**")
+    c = st.columns(3)
+    ticks = {}
+    for i, feature in enumerate(YES_NO):
+        ticks[feature] = c[i % 3].checkbox(feature)
 
-    desc = st.text_area("Agent description (optional)", height=110,
-                        placeholder="Paste the listing description to improve the estimate")
-    submitted = st.form_submit_button("Estimate price", type="primary")
+    description = st.text_area("Agent description (optional)")
+    submitted = st.form_submit_button("Estimate price")
 
 if submitted:
-    row = {"Suburb": suburb, "Type": ptype, "Bedrooms": beds, "Bathrooms": baths, "Cars": cars,
-           "Land_m2": land if (land > 0 and ptype in HOUSE_TYPES) else np.nan,
-           "SaleDate": pd.Timestamp(sale_date), **{k: "Yes" if v else "No" for k, v in flags.items()},
-           "Description": desc, "MultiDwelling": int(multi == "Yes")}
-    price, low, high = predict(row)
-    st.metric("Estimated sale price", f"${price:,.0f}")
-    st.caption(f"Likely range (80%): ${low:,.0f} – {high:,.0f}")
+    row = {"Suburb": suburb, "Type": prop_type, "Bedrooms": bedrooms, "Bathrooms": bathrooms,
+           "Cars": cars, "Land": land if land > 0 else np.nan, "Description": description}
+    for feature in YES_NO:
+        row[feature] = "Yes" if ticks[feature] else "No"
+
+    X = make_features(pd.DataFrame([row]))
+    price = np.exp(model.predict(X[saved["features"]])[0])   # model predicts log(price)
+
+    st.metric("Estimated sale price", "${:,.0f}".format(price))
+    st.caption("For a typical property the model is within about ±{:.0f}% of the real sale price. "
+               "Prestige homes (over $10M) and development sites are much harder to predict, "
+               "so use this as a starting point, not a valuation.".format(saved["typical_error"]))

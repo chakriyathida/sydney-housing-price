@@ -1,38 +1,16 @@
-# Sydney Housing Price Prediction and Decision Support System
-SIT307 Machine Learning — Task 8.1D (ML Mini Project)
+# Sydney Housing Price Estimator
 
-This project predicts the sale price of residential properties in three Sydney suburbs with very
-different markets: **Mount Druitt**, **Cabramatta** and **Vaucluse**. It is trained on 101 sold
-listings collected manually from realestate.com.au and domain.com.au (May 2025 – Sep 2026), and
-includes a Streamlit web app.
+This project started as a Distinction-level assignment for SIT307 Machine Learning at Deakin University (Task 8.1D), but it's built to be useful in the real world. Real estate agents can use it as a quick second opinion before an appraisal: enter a property's details and get an estimated sale price in seconds.
 
-**Live app:** _add your Streamlit Community Cloud link here_
+It covers three very different Sydney suburbs, **Mount Druitt**, **Cabramatta** and **Vaucluse**, and is based on 101 real sold properties.
 
-## Contents
-| File / folder | What it is |
+**Try it here:** https://sydney-housing-price-xth7rckooif6tdmgmtsldy.streamlit.app/
+
+## What's in this repo
+| File | What it is |
 |---|---|
-| `Sydney_Housing_Data.xlsx` | The collected dataset: 101 sold properties, 25 columns including agent descriptions and data-entry notes |
-| `House listing.txt` | The raw text copied from the listing pages, used to build the spreadsheet |
-| `Task 8.1D.ipynb` | The full analysis for Parts 1–5: data collection, EDA, feature engineering, models, error analysis and deployment |
-| `housing_features.py` | The shared feature-engineering transformer, used by both the notebook **and** the app |
-| `sydney_housing_engineered.csv` | The engineered features exported in Part 2 |
-| `app/app.py` | The Streamlit web app |
-| `app/model.joblib` | The trained random forest pipeline, saved by the notebook |
-| `app/train_model.py` | Re-trains `model.joblib` from the spreadsheet if needed |
-| `app/screenshots/` | Screenshots of the app used in the report |
-| `requirements.txt` | Python packages needed by the app |
-
-## Run the app locally
-```bash
-pip install -r requirements.txt
-streamlit run app/app.py
-```
-The app opens at http://localhost:8501. To get a prediction, fill in the boxes and click **Estimate price**.
-
-## Reproduce the analysis
-```bash
-pip install -r requirements.txt matplotlib seaborn jupyter
-```
-Open `Task 8.1D.ipynb` from this folder and choose **Kernel → Restart & Run All**. The nested
-cross-validation in Part 3 takes about 3–5 minutes. Running the notebook re-creates
-`sydney_housing_engineered.csv` and `app/model.joblib`.
+| `Sydney_Housing_Data.xlsx` | The dataset: 101 sold properties collected from realestate.com.au and domain.com.au |
+| `House listing.txt` | The raw listing text the dataset was built from |
+| `Task 8.1D.ipynb` | The full analysis, from data collection to model choice |
+| `app/` | The web app (`app.py`), the trained model and screenshots |
+| `requirements.txt` | Python packages used |
